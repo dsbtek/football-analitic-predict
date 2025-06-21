@@ -1,0 +1,468 @@
+/* Odds Request Modal Styles */
+
+.odds-request-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.odds-request-modal-content {
+    background: white;
+    border-radius: 16px;
+    max-width: 800px;
+    width: 95%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+.odds-request-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    border-bottom: 2px solid #f0f0f0;
+    background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+    color: white;
+    border-radius: 16px 16px 0 0;
+}
+
+.odds-request-header h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+/* Form Styles */
+.odds-request-form {
+    padding: 2rem;
+}
+
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.form-section h4 {
+    margin: 0 0 1rem 0;
+    color: #333;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Odds Input */
+.odds-input-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.odds-input {
+    padding: 0.75rem 1rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    width: 120px;
+    text-align: center;
+    color: #333;
+}
+
+.odds-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+
+.odds-label {
+    font-weight: 600;
+    color: #666;
+}
+
+/* Max Matches */
+.max-matches-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.match-count-btn {
+    width: 50px;
+    height: 50px;
+    border: 2px solid #e1e5e9;
+    background: white;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: #666;
+}
+
+.match-count-btn:hover {
+    border-color: #4CAF50;
+    color: #4CAF50;
+}
+
+.match-count-btn.active {
+    background: #4CAF50;
+    border-color: #4CAF50;
+    color: white;
+}
+
+/* Risk Tolerance */
+.risk-tolerance-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.risk-btn {
+    padding: 1rem 1.5rem;
+    border: 2px solid #e1e5e9;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+}
+
+.risk-btn:hover {
+    border-color: #2196F3;
+    background: #f8f9ff;
+}
+
+.risk-btn.active {
+    border-color: #2196F3;
+    background: #e3f2fd;
+}
+
+.risk-label {
+    display: block;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 0.25rem;
+}
+
+.risk-desc {
+    display: block;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+/* Outcomes */
+.outcomes-group {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.outcome-btn {
+    padding: 0.75rem 1.5rem;
+    border: 2px solid #ddd;
+    background: white;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.outcome-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.outcome-btn.active {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Search Button */
+.search-btn {
+    width: 100%;
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 1rem;
+}
+
+.search-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.search-btn:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Results Section */
+.combinations-results {
+    border-top: 2px solid #f0f0f0;
+    padding: 2rem;
+    background: #f8f9fa;
+}
+
+.results-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.results-header h4 {
+    margin: 0 0 0.5rem 0;
+    color: #333;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+
+.results-header p {
+    margin: 0;
+    color: #666;
+    font-size: 0.95rem;
+}
+
+.no-combinations {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: #666;
+}
+
+.no-combinations p {
+    margin: 0.5rem 0;
+    font-size: 1rem;
+}
+
+/* Combinations List */
+.combinations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.combination-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e1e5e9;
+    transition: all 0.3s ease;
+}
+
+.combination-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.combo-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.combo-type {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.combo-icon {
+    font-size: 1.5rem;
+}
+
+.combo-label {
+    font-weight: 700;
+    color: #333;
+    font-size: 0.9rem;
+}
+
+.combo-odds {
+    text-align: right;
+}
+
+.odds-value {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #4CAF50;
+}
+
+.odds-label {
+    font-size: 0.8rem;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.combo-description {
+    margin-bottom: 1rem;
+    color: #555;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.combo-details {
+    margin-bottom: 1rem;
+}
+
+.combo-matches {
+    margin-bottom: 1rem;
+}
+
+.combo-match {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.combo-match:last-child {
+    border-bottom: none;
+}
+
+.match-teams {
+    font-weight: 600;
+    color: #333;
+}
+
+.match-outcome {
+    background: #e3f2fd;
+    color: #1976d2;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.combo-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.stat-value {
+    font-weight: 700;
+    color: #333;
+}
+
+.risk-badge {
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.combo-reasoning {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #2196F3;
+}
+
+.combo-reasoning small {
+    color: #555;
+    font-style: italic;
+}
+
+.combo-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.add-to-cart-combo-btn, .analyze-combo-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.add-to-cart-combo-btn {
+    background: #4CAF50;
+    color: white;
+}
+
+.add-to-cart-combo-btn:hover {
+    background: #45a049;
+    transform: translateY(-2px);
+}
+
+.analyze-combo-btn {
+    background: #2196F3;
+    color: white;
+}
+
+.analyze-combo-btn:hover {
+    background: #1976D2;
+    transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .odds-request-modal-content {
+        width: 95%;
+        margin: 1rem;
+    }
+    
+    .odds-request-header, .odds-request-form, .combinations-results {
+        padding: 1.5rem;
+    }
+    
+    .risk-tolerance-group {
+        gap: 0.5rem;
+    }
+    
+    .outcomes-group {
+        flex-direction: column;
+    }
+    
+    .combo-header {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .combo-stats {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .combo-actions {
+        flex-direction: column;
+    }
+}

@@ -4,6 +4,9 @@ import Login from './components/Login';
 import Register from './components/Register';
 import UserProfile from './components/UserProfile';
 import ConnectionStatus from './components/ConnectionStatus';
+import PredictionModal from './components/PredictionModal';
+import OddsRequestModal from './components/OddsRequestModal';
+import FloatingNews from './components/FloatingNews';
 import useWebSocket from './hooks/useWebSocket';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -37,6 +40,13 @@ function App() {
         token,
     );
     const [lastUpdateTime, setLastUpdateTime] = useState(null);
+
+    // New modal states
+    const [predictionModalVisible, setPredictionModalVisible] = useState(false);
+    const [selectedMatchForPrediction, setSelectedMatchForPrediction] =
+        useState(null);
+    const [oddsRequestModalVisible, setOddsRequestModalVisible] =
+        useState(false);
 
     // Fetch matches from API with pagination
     const fetchMatches = async (page = currentPage, size = pageSize) => {
@@ -374,6 +384,25 @@ function App() {
         }
     }, []);
 
+    // New feature functions
+    const openPredictionModal = (match) => {
+        setSelectedMatchForPrediction(match);
+        setPredictionModalVisible(true);
+    };
+
+    const closePredictionModal = () => {
+        setPredictionModalVisible(false);
+        setSelectedMatchForPrediction(null);
+    };
+
+    const openOddsRequestModal = () => {
+        setOddsRequestModalVisible(true);
+    };
+
+    const closeOddsRequestModal = () => {
+        setOddsRequestModalVisible(false);
+    };
+
     // Check if bet is in cart
     const isBetInCart = (matchId, betType) => {
         return cart.some(
@@ -483,6 +512,13 @@ function App() {
                     >
                         🛒 Cart ({cart.length})
                     </button>
+
+                    <button
+                        onClick={openOddsRequestModal}
+                        className="odds-request-btn"
+                    >
+                        🎯 Custom Odds
+                    </button>
                 </div>
 
                 {/* Cart Modal */}
@@ -583,12 +619,26 @@ function App() {
                                             className="match-card"
                                         >
                                             <div className="match-header">
-                                                <h3>
-                                                    {match.home} vs {match.away}
-                                                </h3>
-                                                <span className="bookmaker">
-                                                    {match.bookmaker}
-                                                </span>
+                                                <div className="match-title-section">
+                                                    <h3>
+                                                        {match.home} vs{' '}
+                                                        {match.away}
+                                                    </h3>
+                                                    <span className="bookmaker">
+                                                        {match.bookmaker}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() =>
+                                                        openPredictionModal(
+                                                            match,
+                                                        )
+                                                    }
+                                                    className="predict-match-btn"
+                                                    title="Get AI Prediction"
+                                                >
+                                                    🔮
+                                                </button>
                                             </div>
 
                                             <div className="match-time">
@@ -776,6 +826,25 @@ function App() {
                     Built with ❤️ by Muhammad - Betting like a data scientist 📊
                 </p>
             </footer>
+
+            {/* Prediction Modal */}
+            {predictionModalVisible && selectedMatchForPrediction && (
+                <PredictionModal
+                    match={selectedMatchForPrediction}
+                    onClose={closePredictionModal}
+                    onPredict={(prediction) => {
+                        console.log('Prediction received:', prediction);
+                    }}
+                />
+            )}
+
+            {/* Odds Request Modal */}
+            {oddsRequestModalVisible && (
+                <OddsRequestModal onClose={closeOddsRequestModal} />
+            )}
+
+            {/* Floating News */}
+            <FloatingNews />
         </div>
     );
 }

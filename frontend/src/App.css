@@ -212,10 +212,14 @@ body {
 .match-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 1rem;
     padding-bottom: 1rem;
     border-bottom: 2px solid #f0f0f0;
+}
+
+.match-title-section {
+    flex: 1;
 }
 
 .match-header h3 {
@@ -319,6 +323,49 @@ body {
 .cart-btn:hover {
     background: #f57c00;
     transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* New Feature Buttons */
+.odds-request-btn {
+    background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.odds-request-btn:hover {
+    background: linear-gradient(135deg, #ff5252, #26c6da);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.predict-match-btn {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+}
+
+.predict-match-btn:hover {
+    background: linear-gradient(135deg, #5a67d8, #6b46c1);
+    transform: translateY(-2px) scale(1.05);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
@@ -546,8 +593,18 @@ body {
     }
 
     .match-header {
-        flex-direction: column;
-        gap: 0.5rem;
+        flex-direction: row;
+        gap: 1rem;
         align-items: flex-start;
+    }
+
+    .match-title-section {
+        flex: 1;
+    }
+
+    .predict-match-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
     }
 }

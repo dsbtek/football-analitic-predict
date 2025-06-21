@@ -10,3 +10,6 @@ bcrypt
 email-validator
 psutil
 websockets
+beautifulsoup4
+feedparser
+lxml

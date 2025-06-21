@@ -125,4 +125,4 @@ python test_elo.py
 
 ## 🧠 Author
 
-Built by **Muhammad** — betting like a data scientist ⚽📊
+Built by **Binary Brainwaves Nigeria Limited** — betting like a data scientist ⚽📊

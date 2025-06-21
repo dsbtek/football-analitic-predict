@@ -2,6 +2,8 @@ from app.websocket_manager import (
     connection_manager, real_time_updater, authenticate_websocket,
     handle_websocket_message, start_real_time_updates
 )
+from app.prediction_engine import prediction_engine, PredictionResult, OddsRequest
+from app.news_scraper import news_scraper
 from app.monitoring import (
     performance_monitor, health_checker, error_tracker,
     create_monitoring_middleware, setup_logging
@@ -720,3 +722,278 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
 async def get_websocket_stats():
     """Get WebSocket connection statistics."""
     return connection_manager.get_connection_stats()
+
+
+# Prediction Endpoints
+
+@app.post("/predict/match")
+async def predict_match_outcome(
+    home_team: str,
+    away_team: str,
+    additional_factors: Optional[Dict] = None
+):
+    """
+    Predict outcome for a specific match.
+
+    Args:
+        home_team: Name of the home team
+        away_team: Name of the away team
+        additional_factors: Optional additional factors (form, injuries, etc.)
+
+    Returns:
+        Detailed prediction with confidence and reasoning
+    """
+    try:
+        prediction = prediction_engine.predict_match_outcome(
+            home_team, away_team, additional_factors
+        )
+
+        return {
+            "prediction": {
+                "home_team": prediction.home_team,
+                "away_team": prediction.away_team,
+                "predicted_outcome": prediction.predicted_outcome,
+                "confidence": prediction.confidence,
+                "probabilities": prediction.probabilities,
+                "reasoning": prediction.reasoning,
+                "risk_level": prediction.risk_level,
+                "expected_value": prediction.expected_value
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {str(e)}"
+        )
+
+
+@app.post("/predict/batch")
+async def predict_multiple_matches(
+    matches: List[Dict[str, str]],
+    db_session: Session = Depends(get_db)
+):
+    """
+    Predict outcomes for multiple matches.
+
+    Args:
+        matches: List of matches with 'home' and 'away' team names
+
+    Returns:
+        List of predictions for all matches
+    """
+    try:
+        predictions = []
+
+        for match in matches:
+            if 'home' not in match or 'away' not in match:
+                continue
+
+            prediction = prediction_engine.predict_match_outcome(
+                match['home'], match['away']
+            )
+
+            predictions.append({
+                "match": f"{match['home']} vs {match['away']}",
+                "prediction": {
+                    "predicted_outcome": prediction.predicted_outcome,
+                    "confidence": prediction.confidence,
+                    "probabilities": prediction.probabilities,
+                    "reasoning": prediction.reasoning,
+                    "risk_level": prediction.risk_level
+                }
+            })
+
+        return {
+            "predictions": predictions,
+            "total_matches": len(predictions),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch prediction failed: {str(e)}"
+        )
+
+
+@app.post("/odds/request")
+async def request_custom_odds(
+    target_odds: float,
+    max_matches: int = Query(3, ge=1, le=5),
+    risk_tolerance: str = Query(
+        "moderate", regex="^(conservative|moderate|aggressive)$"),
+    preferred_outcomes: Optional[List[str]] = None,
+    db_session: Session = Depends(get_db)
+):
+    """
+    Find match combinations for specific odds requirements.
+
+    Args:
+        target_odds: Target odds value (e.g., 3.0)
+        max_matches: Maximum number of matches in combination
+        risk_tolerance: Risk tolerance level
+        preferred_outcomes: Preferred outcomes (home, draw, away)
+
+    Returns:
+        List of match combinations that meet the criteria
+    """
+    try:
+        # Get available matches
+        matches = db_session.query(db.Match).all()
+
+        if not matches:
+            raise HTTPException(
+                status_code=404,
+                detail="No matches available for odds calculation"
+            )
+
+        # Convert to dictionaries
+        available_matches = []
+        for match in matches:
+            match_dict = {
+                "id": match.id,
+                "home": match.home,
+                "away": match.away,
+                "bookmaker": match.bookmaker,
+                "home_odds": match.home_odds,
+                "draw_odds": match.draw_odds,
+                "away_odds": match.away_odds,
+                "start_time": match.start_time.isoformat() if match.start_time else None
+            }
+            available_matches.append(match_dict)
+
+        # Create odds request
+        odds_request = OddsRequest(
+            target_odds=target_odds,
+            max_matches=max_matches,
+            risk_tolerance=risk_tolerance,
+            preferred_outcomes=preferred_outcomes or ['home', 'draw', 'away']
+        )
+
+        # Find matching combinations
+        combinations = prediction_engine.find_matches_for_odds(
+            odds_request, available_matches
+        )
+
+        return {
+            "request": {
+                "target_odds": target_odds,
+                "max_matches": max_matches,
+                "risk_tolerance": risk_tolerance,
+                "preferred_outcomes": preferred_outcomes
+            },
+            "combinations": combinations,
+            "total_found": len(combinations),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Odds request failed: {str(e)}"
+        )
+
+
+# News Endpoints
+
+@app.get("/news/latest")
+async def get_latest_news(
+    force_refresh: bool = Query(False, description="Force refresh news cache"),
+    limit: int = Query(
+        20, ge=1, le=50, description="Number of news items to return")
+):
+    """
+    Get latest football news.
+
+    Args:
+        force_refresh: Force refresh of news cache
+        limit: Maximum number of news items to return
+
+    Returns:
+        List of latest football news items
+    """
+    try:
+        news_items = await news_scraper.get_latest_news(force_refresh)
+
+        return {
+            "news": news_items[:limit],
+            "total_items": len(news_items),
+            "last_updated": news_scraper.last_update.isoformat() if news_scraper.last_update else None,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch news: {str(e)}"
+        )
+
+
+@app.get("/news/team/{team_name}")
+async def get_team_news(
+    team_name: str,
+    limit: int = Query(
+        10, ge=1, le=20, description="Number of news items to return")
+):
+    """
+    Get news for a specific team.
+
+    Args:
+        team_name: Name of the team
+        limit: Maximum number of news items to return
+
+    Returns:
+        List of news items related to the team
+    """
+    try:
+        team_news = await news_scraper.get_news_by_team(team_name)
+
+        return {
+            "team": team_name,
+            "news": team_news[:limit],
+            "total_items": len(team_news),
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch team news: {str(e)}"
+        )
+
+
+@app.get("/news/category/{category}")
+async def get_news_by_category(
+    category: str = Query(..., regex="^(transfer|match|injury|general)$"),
+    limit: int = Query(
+        15, ge=1, le=30, description="Number of news items to return")
+):
+    """
+    Get news by category.
+
+    Args:
+        category: News category (transfer, match, injury, general)
+        limit: Maximum number of news items to return
+
+    Returns:
+        List of news items in the specified category
+    """
+    try:
+        category_news = await news_scraper.get_news_by_category(category)
+
+        return {
+            "category": category,
+            "news": category_news[:limit],
+            "total_items": len(category_news),
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch category news: {str(e)}"
+        )
