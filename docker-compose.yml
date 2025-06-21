@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+    backend:
+        build: ./backend
+        container_name: betting-backend
+        ports:
+            - '8000:8000'
+        volumes:
+            - ./backend:/app
+        working_dir: /app
+        environment:
+            - ODDS_API_KEY=${ODDS_API_KEY:-}
+            - DATABASE_URL=sqlite:///./matches.db
+            - API_HOST=0.0.0.0
+            - API_PORT=8000
+            - FRONTEND_URL=http://localhost:3000
+        command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+        depends_on:
+            - frontend
+
+    frontend:
+        build: ./frontend
+        container_name: betting-frontend
+        ports:
+            - '3000:3000'
+        volumes:
+            - ./frontend:/app
+            - /app/node_modules
+        working_dir: /app
+        environment:
+            - REACT_APP_API_URL=http://localhost:8000
+        command: ['npm', 'start']

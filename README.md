@@ -1,14 +1,13 @@
-
 # 📈 Sports Betting Value Predictor (EPL)
 
 This is a full-stack application that fetches English Premier League odds, calculates match outcome probabilities using an Elo rating model, and highlights **value bets** where the bettor has a statistical edge over the bookmaker.
 
 ## 🔧 Stack
 
-- **Backend**: FastAPI + SQLite + Python
-- **Frontend**: React
-- **Data Source**: [The Odds API](https://the-odds-api.com)
-- **Containerization**: Docker & Docker Compose
+-   **Backend**: FastAPI + SQLite + Python
+-   **Frontend**: React
+-   **Data Source**: [The Odds API](https://the-odds-api.com)
+-   **Containerization**: Docker & Docker Compose
 
 ## 📁 Project Structure
 
@@ -36,20 +35,42 @@ project-root/
 
 ### 🔐 1. Get Your Odds API Key
 
-Register and get a free API key at:  
+Register and get a free API key at:
 👉 [https://the-odds-api.com](https://the-odds-api.com)
 
-Set it in your `.env` file or directly in the code.
+### ⚙️ 2. Set Up Environment Variables
 
-### ⚙️ 2. Build and Run the Stack
+Copy the example environment file and add your API key:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your API key:
+
+```bash
+ODDS_API_KEY=your_actual_api_key_here
+```
+
+### 🐳 3. Build and Run with Docker
 
 ```bash
 docker-compose up --build
 ```
 
-- React frontend runs on: `http://localhost:3000`
-- FastAPI backend runs on: `http://localhost:8000`
-- SQLite DB stored in `backend/app/matches.db`
+-   **React frontend**: `http://localhost:3000`
+-   **FastAPI backend**: `http://localhost:8000`
+-   **API documentation**: `http://localhost:8000/docs`
+-   **SQLite DB**: `backend/app/matches.db`
+
+### 🧪 4. Test the System
+
+Run the test suite to verify everything works:
+
+```bash
+cd backend
+python test_elo.py
+```
 
 ## 🧠 How It Works
 
@@ -61,16 +82,16 @@ docker-compose up --build
 
 ## 📊 API Endpoint
 
-| Endpoint | Method | Description         |
-|----------|--------|---------------------|
+| Endpoint    | Method | Description            |
+| ----------- | ------ | ---------------------- |
 | `/matches/` | GET    | Returns all value bets |
 
 ## 💡 Future Improvements
 
-- Add **automatic Elo rating updates** from match history
-- Include **Kelly Criterion** for bet sizing
-- Deploy with **NGINX + HTTPS**
-- Add **authentication** and user dashboards
+-   Add **automatic Elo rating updates** from match history
+-   Include **Kelly Criterion** for bet sizing
+-   Deploy with **NGINX + HTTPS**
+-   Add **authentication** and user dashboards
 
 ## 🧠 Author
 
