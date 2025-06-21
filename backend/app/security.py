@@ -125,34 +125,32 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 
 def rate_limit(max_requests: int = 100, window_seconds: int = 3600):
-    """Rate limiting decorator."""
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            # Get client IP (in production, use proper IP detection)
-            client_ip = "127.0.0.1"  # Simplified for demo
+    """Rate limiting dependency for FastAPI."""
+    def check_rate_limit():
+        # Get client IP (in production, use proper IP detection)
+        client_ip = "127.0.0.1"  # Simplified for demo
 
-            current_time = time.time()
-            window_start = current_time - window_seconds
+        current_time = time.time()
+        window_start = current_time - window_seconds
 
-            # Clean old requests
-            rate_limit_storage[client_ip] = [
-                req_time for req_time in rate_limit_storage[client_ip]
-                if req_time > window_start
-            ]
+        # Clean old requests
+        rate_limit_storage[client_ip] = [
+            req_time for req_time in rate_limit_storage[client_ip]
+            if req_time > window_start
+        ]
 
-            # Check rate limit
-            if len(rate_limit_storage[client_ip]) >= max_requests:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Rate limit exceeded"
-                )
+        # Check rate limit
+        if len(rate_limit_storage[client_ip]) >= max_requests:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded"
+            )
 
-            # Record this request
-            rate_limit_storage[client_ip].append(current_time)
+        # Record this request
+        rate_limit_storage[client_ip].append(current_time)
+        return True
 
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
+    return check_rate_limit
 
 
 def validate_api_key(api_key: str) -> bool:

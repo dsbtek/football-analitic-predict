@@ -4,6 +4,7 @@ from app.websocket_manager import (
 )
 from app.prediction_engine import prediction_engine, PredictionResult, OddsRequest
 from app.news_scraper import news_scraper
+from app.odds_scraper import odds_scraper
 from app.monitoring import (
     performance_monitor, health_checker, error_tracker,
     create_monitoring_middleware, setup_logging
@@ -155,8 +156,10 @@ def read_root():
 # Authentication Endpoints
 
 @app.post("/auth/register", response_model=User)
-@rate_limit(max_requests=5, window_seconds=3600)  # 5 registrations per hour
-def register_user(user_data: UserCreate):
+def register_user(
+    user_data: UserCreate,
+    _: bool = Depends(rate_limit(max_requests=5, window_seconds=3600))
+):
     """Register a new user."""
     try:
         user = user_db.create_user(user_data)
@@ -171,9 +174,10 @@ def register_user(user_data: UserCreate):
 
 
 @app.post("/auth/login", response_model=Token)
-# 10 login attempts per 15 minutes
-@rate_limit(max_requests=10, window_seconds=900)
-def login_user(user_credentials: UserLogin):
+def login_user(
+    user_credentials: UserLogin,
+    _: bool = Depends(rate_limit(max_requests=10, window_seconds=900))
+):
     """Authenticate user and return tokens."""
     user = user_db.authenticate_user(
         user_credentials.email,
@@ -726,26 +730,26 @@ async def get_websocket_stats():
 
 # Prediction Endpoints
 
-@app.post("/predict/match")
-async def predict_match_outcome(
-    home_team: str,
-    away_team: str,
+class MatchPredictionRequest(BaseModel):
+    home_team: str
+    away_team: str
     additional_factors: Optional[Dict] = None
-):
+
+
+@app.post("/predict/match")
+async def predict_match_outcome(request: MatchPredictionRequest):
     """
     Predict outcome for a specific match.
 
     Args:
-        home_team: Name of the home team
-        away_team: Name of the away team
-        additional_factors: Optional additional factors (form, injuries, etc.)
+        request: Match prediction request with team names and optional factors
 
     Returns:
         Detailed prediction with confidence and reasoning
     """
     try:
         prediction = prediction_engine.predict_match_outcome(
-            home_team, away_team, additional_factors
+            request.home_team, request.away_team, request.additional_factors
         )
 
         return {
@@ -968,7 +972,7 @@ async def get_team_news(
 
 @app.get("/news/category/{category}")
 async def get_news_by_category(
-    category: str = Query(..., regex="^(transfer|match|injury|general)$"),
+    category: str,
     limit: int = Query(
         15, ge=1, le=30, description="Number of news items to return")
 ):
@@ -982,6 +986,14 @@ async def get_news_by_category(
     Returns:
         List of news items in the specified category
     """
+    # Validate category parameter
+    valid_categories = ['transfer', 'match', 'injury', 'general']
+    if category not in valid_categories:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category. Must be one of: {', '.join(valid_categories)}"
+        )
+
     try:
         category_news = await news_scraper.get_news_by_category(category)
 
@@ -996,4 +1008,64 @@ async def get_news_by_category(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to fetch category news: {str(e)}"
+        )
+
+
+# Odds Scraper Endpoints
+
+@app.get("/odds/scraped")
+async def get_scraped_odds(
+    force_scrape: bool = Query(
+        False, description="Force refresh scraped odds"),
+    limit: int = Query(20, ge=1, le=50, description="Number of odds to return")
+):
+    """
+    Get odds from web scraping (fallback system).
+
+    Args:
+        force_scrape: Force refresh of scraped odds
+        limit: Maximum number of odds to return
+
+    Returns:
+        List of scraped odds data
+    """
+    try:
+        odds_data = await odds_scraper.get_odds_data(force_scrape)
+
+        return {
+            "odds": odds_data[:limit],
+            "total_items": len(odds_data),
+            "last_scraped": odds_scraper.last_scrape.isoformat() if odds_scraper.last_scrape else None,
+            "source": "web_scraping",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch scraped odds: {str(e)}"
+        )
+
+
+@app.post("/odds/scrape-to-db")
+async def convert_scraped_odds_to_matches():
+    """
+    Convert scraped odds to database matches format.
+
+    Returns:
+        Number of matches added to database
+    """
+    try:
+        matches_added = await odds_scraper.convert_scraped_to_matches()
+
+        return {
+            "matches_added": matches_added,
+            "message": f"Successfully added {matches_added} matches from scraped odds",
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to convert scraped odds: {str(e)}"
         )
