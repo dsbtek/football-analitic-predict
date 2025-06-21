@@ -5,3 +5,8 @@ pandas
 sqlalchemy
 sqlite-utils
 python-dotenv
+pyjwt
+bcrypt
+email-validator
+psutil
+websockets

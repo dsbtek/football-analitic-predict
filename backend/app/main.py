@@ -1,16 +1,86 @@
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from typing import List, Dict
-from app import db
-from app.fetcher import get_odds_fetcher
-from app.elo import elo_system
+from app.websocket_manager import (
+    connection_manager, real_time_updater, authenticate_websocket,
+    handle_websocket_message, start_real_time_updates
+)
+from app.monitoring import (
+    performance_monitor, health_checker, error_tracker,
+    create_monitoring_middleware, setup_logging
+)
+from app.security import (
+    get_current_user, rate_limit, get_security_headers,
+    user_db, UserCreate, UserLogin, Token, User,
+    create_access_token, create_refresh_token, verify_token
+)
 from app.config import settings
+from app.elo import elo_system
+from app.fetcher import get_odds_fetcher
+from app import db
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query, Request, Response, status, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.security import HTTPBearer
+from sqlalchemy.orm import Session
+from typing import List, Dict, Optional
+from pydantic import BaseModel
+import math
+import json
+import asyncio
+import logging
+import os
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
+
+# Pydantic models for API responses
+
+
+class PaginationInfo(BaseModel):
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    has_next: bool
+    has_previous: bool
+
+
+class PaginatedMatchesResponse(BaseModel):
+    matches: List[Dict]
+    pagination: PaginationInfo
+
+
+class CartItem(BaseModel):
+    match_id: int
+    home: str
+    away: str
+    bookmaker: str
+    bet_type: str  # 'home', 'draw', 'away'
+    odds: float
+    value: float
+
+
+class CartResponse(BaseModel):
+    items: List[CartItem]
+    total_items: int
+
+
+class AddToCartRequest(BaseModel):
+    match_id: int
+    bet_type: str  # 'home', 'draw', 'away'
+
+
+# In-memory cart storage (in production, use Redis or database)
+cart_storage: Dict[str, List[CartItem]] = {}
 
 app = FastAPI(
     title="Football Analytics Predictor",
     description="EPL value betting system using Elo ratings",
     version="1.0.0"
+)
+
+# Add security middleware
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1", "*.yourdomain.com"]
 )
 
 # Add CORS middleware
@@ -21,6 +91,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    # Get environment from settings or default to development
+    environment = os.getenv('ENVIRONMENT', 'development')
+    headers = get_security_headers(environment)
+
+    for header, value in headers.items():
+        response.headers[header] = value
+    return response
+
+
+# Monitoring middleware
+@app.middleware("http")
+async def monitoring_middleware(request: Request, call_next):
+    return await create_monitoring_middleware()(request, call_next)
+
+
+# Initialize logging
+setup_logging()
+
+
+# Startup event to initialize real-time updates
+@app.on_event("startup")
+async def startup_event():
+    """Initialize background tasks on startup."""
+    asyncio.create_task(start_real_time_updates())
 
 
 def get_db():
@@ -42,27 +143,161 @@ def read_root():
             "/matches/": "Get all value bets",
             "/matches/refresh": "Refresh odds data",
             "/teams/ratings": "Get current team ratings",
+            "/auth/register": "Register new user",
+            "/auth/login": "User login",
             "/health": "Health check"
         }
     }
 
 
+# Authentication Endpoints
+
+@app.post("/auth/register", response_model=User)
+@rate_limit(max_requests=5, window_seconds=3600)  # 5 registrations per hour
+def register_user(user_data: UserCreate):
+    """Register a new user."""
+    try:
+        user = user_db.create_user(user_data)
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Registration failed: {str(e)}"
+        )
+
+
+@app.post("/auth/login", response_model=Token)
+# 10 login attempts per 15 minutes
+@rate_limit(max_requests=10, window_seconds=900)
+def login_user(user_credentials: UserLogin):
+    """Authenticate user and return tokens."""
+    user = user_db.authenticate_user(
+        user_credentials.email,
+        user_credentials.password
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+
+    # Create tokens
+    access_token = create_access_token(
+        data={"sub": user.email, "user_id": user.id}
+    )
+    refresh_token = create_refresh_token(
+        data={"sub": user.email, "user_id": user.id}
+    )
+
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer"
+    )
+
+
+@app.post("/auth/refresh", response_model=Token)
+def refresh_access_token(refresh_token: str):
+    """Refresh access token using refresh token."""
+    try:
+        payload = verify_token(refresh_token, token_type="refresh")
+        email = payload.get("sub")
+        user_id = payload.get("user_id")
+
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+
+        # Create new tokens
+        new_access_token = create_access_token(
+            data={"sub": email, "user_id": user_id}
+        )
+        new_refresh_token = create_refresh_token(
+            data={"sub": email, "user_id": user_id}
+        )
+
+        return Token(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            token_type="bearer"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Token refresh failed: {str(e)}"
+        )
+
+
+@app.get("/auth/me", response_model=User)
+def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """Get current user information."""
+    user = user_db.get_user_by_email(current_user["email"])
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
+
+
 @app.get("/health")
 def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "football-analytics-api"}
+    """Comprehensive health check endpoint."""
+    return health_checker.get_health_status()
 
 
-@app.get("/matches/", response_model=List[Dict])
-def get_value_matches(db_session: Session = Depends(get_db)):
+@app.get("/metrics")
+def get_metrics():
+    """Get application performance metrics."""
+    return performance_monitor.get_metrics()
+
+
+@app.get("/errors")
+def get_recent_errors(limit: int = Query(10, ge=1, le=50)):
+    """Get recent application errors."""
+    return {
+        "errors": error_tracker.get_recent_errors(limit),
+        "total_errors": len(error_tracker.errors)
+    }
+
+
+@app.get("/matches/", response_model=PaginatedMatchesResponse)
+def get_value_matches(
+    page: int = Query(1, ge=1, description="Page number (starts from 1)"),
+    page_size: int = Query(
+        10, ge=1, le=100, description="Number of items per page"),
+    db_session: Session = Depends(get_db)
+):
     """
-    Get all current value bets from the database.
+    Get paginated value bets from the database.
+
+    Args:
+        page: Page number (starts from 1)
+        page_size: Number of items per page (1-100)
 
     Returns:
-        List of value bet opportunities
+        Paginated list of value bet opportunities
     """
     try:
-        matches = db_session.query(db.Match).all()
+        # Get total count
+        total_count = db_session.query(db.Match).count()
+
+        # Calculate pagination info
+        total_pages = math.ceil(
+            total_count / page_size) if total_count > 0 else 1
+        offset = (page - 1) * page_size
+
+        # Get paginated matches
+        matches_query = db_session.query(
+            db.Match).offset(offset).limit(page_size)
+        matches = matches_query.all()
 
         # Convert to dictionaries for JSON response
         result = []
@@ -89,7 +324,21 @@ def get_value_matches(db_session: Session = Depends(get_db)):
 
         # Sort by best value descending
         result.sort(key=lambda x: x["best_value"], reverse=True)
-        return result
+
+        # Create pagination info
+        pagination_info = PaginationInfo(
+            page=page,
+            page_size=page_size,
+            total_items=total_count,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1
+        )
+
+        return PaginatedMatchesResponse(
+            matches=result,
+            pagination=pagination_info
+        )
 
     except Exception as e:
         raise HTTPException(
@@ -98,15 +347,35 @@ def get_value_matches(db_session: Session = Depends(get_db)):
 
 async def refresh_odds_background():
     """Background task to refresh odds data."""
+    # Notify clients that refresh is starting
+    await real_time_updater.send_odds_refresh_notification()
+
     fetcher = get_odds_fetcher()
     if fetcher:
         try:
             count = await fetcher.fetch_and_store_value_bets()
             print(f"Background refresh completed: {count} value bets stored")
+
+            # Notify clients that refresh is complete
+            await real_time_updater.send_odds_refresh_complete(count)
+
+            # Send updated matches to all clients
+            await real_time_updater.check_and_send_updates()
+
         except Exception as e:
             print(f"Background refresh failed: {e}")
+            await real_time_updater.send_system_notification(
+                "odds_refresh_error",
+                f"Odds refresh failed: {str(e)}",
+                "error"
+            )
     else:
         print("Cannot refresh odds: API key not configured")
+        await real_time_updater.send_system_notification(
+            "odds_refresh_error",
+            "Cannot refresh odds: API key not configured",
+            "warning"
+        )
 
 
 @app.post("/matches/refresh")
@@ -188,3 +457,266 @@ def get_match_probabilities(home_team: str, away_team: str):
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error calculating probabilities: {str(e)}")
+
+
+# Cart Management Endpoints
+
+def get_cart_key(session_id: str = "default") -> str:
+    """Generate cart key for session."""
+    return f"cart_{session_id}"
+
+
+@app.post("/cart/add")
+def add_to_cart(
+    request: AddToCartRequest,
+    session_id: str = Query("default", description="Session ID for cart"),
+    db_session: Session = Depends(get_db)
+):
+    """
+    Add a match bet to the cart.
+
+    Args:
+        request: Match ID and bet type to add
+        session_id: Session identifier for the cart
+
+    Returns:
+        Updated cart contents
+    """
+    try:
+        # Get the match from database
+        match = db_session.query(db.Match).filter(
+            db.Match.id == request.match_id).first()
+        if not match:
+            raise HTTPException(status_code=404, detail="Match not found")
+
+        # Validate bet type and get odds/value
+        bet_type = request.bet_type.lower()
+        if bet_type == "home":
+            odds = match.home_odds
+            value = match.value_home or 0
+        elif bet_type == "draw":
+            odds = match.draw_odds
+            value = match.value_draw or 0
+        elif bet_type == "away":
+            odds = match.away_odds
+            value = match.value_away or 0
+        else:
+            raise HTTPException(
+                status_code=400, detail="Invalid bet type. Must be 'home', 'draw', or 'away'")
+
+        # Check if value bet exists
+        if value <= 0:
+            raise HTTPException(
+                status_code=400, detail="This is not a value bet")
+
+        cart_key = get_cart_key(session_id)
+        if cart_key not in cart_storage:
+            cart_storage[cart_key] = []
+
+        # Check for duplicates (same match + bet type)
+        existing_item = next(
+            (item for item in cart_storage[cart_key]
+             if item.match_id == request.match_id and item.bet_type == bet_type),
+            None
+        )
+
+        if existing_item:
+            raise HTTPException(
+                status_code=400, detail="This bet is already in your cart")
+
+        # Create cart item
+        cart_item = CartItem(
+            match_id=match.id,
+            home=match.home,
+            away=match.away,
+            bookmaker=match.bookmaker,
+            bet_type=bet_type,
+            odds=odds,
+            value=round(value, 2)
+        )
+
+        cart_storage[cart_key].append(cart_item)
+
+        return CartResponse(
+            items=cart_storage[cart_key],
+            total_items=len(cart_storage[cart_key])
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error adding to cart: {str(e)}")
+
+
+@app.get("/cart/", response_model=CartResponse)
+def get_cart(session_id: str = Query("default", description="Session ID for cart")):
+    """
+    Get current cart contents.
+
+    Args:
+        session_id: Session identifier for the cart
+
+    Returns:
+        Current cart contents
+    """
+    cart_key = get_cart_key(session_id)
+    items = cart_storage.get(cart_key, [])
+
+    return CartResponse(
+        items=items,
+        total_items=len(items)
+    )
+
+
+@app.delete("/cart/remove/{match_id}/{bet_type}")
+def remove_from_cart(
+    match_id: int,
+    bet_type: str,
+    session_id: str = Query("default", description="Session ID for cart")
+):
+    """
+    Remove a specific bet from the cart.
+
+    Args:
+        match_id: ID of the match
+        bet_type: Type of bet ('home', 'draw', 'away')
+        session_id: Session identifier for the cart
+
+    Returns:
+        Updated cart contents
+    """
+    cart_key = get_cart_key(session_id)
+    if cart_key not in cart_storage:
+        cart_storage[cart_key] = []
+
+    # Remove the item
+    cart_storage[cart_key] = [
+        item for item in cart_storage[cart_key]
+        if not (item.match_id == match_id and item.bet_type == bet_type.lower())
+    ]
+
+    return CartResponse(
+        items=cart_storage[cart_key],
+        total_items=len(cart_storage[cart_key])
+    )
+
+
+@app.delete("/cart/clear")
+def clear_cart(session_id: str = Query("default", description="Session ID for cart")):
+    """
+    Clear all items from the cart.
+
+    Args:
+        session_id: Session identifier for the cart
+
+    Returns:
+        Empty cart response
+    """
+    cart_key = get_cart_key(session_id)
+    cart_storage[cart_key] = []
+
+    return CartResponse(items=[], total_items=0)
+
+
+@app.get("/cart/print")
+def get_printable_cart(session_id: str = Query("default", description="Session ID for cart")):
+    """
+    Get cart contents formatted for printing.
+
+    Args:
+        session_id: Session identifier for the cart
+
+    Returns:
+        Formatted cart data for printing
+    """
+    cart_key = get_cart_key(session_id)
+    items = cart_storage.get(cart_key, [])
+
+    if not items:
+        return {"message": "Cart is empty", "items": []}
+
+    # Format for printing
+    formatted_items = []
+    total_value = 0
+
+    for item in items:
+        formatted_item = {
+            "match": f"{item.home} vs {item.away}",
+            "bookmaker": item.bookmaker,
+            "bet": f"{item.bet_type.title()} Win",
+            "odds": f"{item.odds:.2f}",
+            "value": f"+{item.value}%",
+            "potential_return": f"£{(item.odds * 10):.2f} (£10 stake)"
+        }
+        formatted_items.append(formatted_item)
+        total_value += item.value
+
+    return {
+        "title": "🎯 Value Betting Selections",
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "total_selections": len(items),
+        "average_value": f"+{(total_value / len(items)):.1f}%",
+        "items": formatted_items,
+        "disclaimer": "⚠️ Gambling involves risk. Only bet what you can afford to lose."
+    }
+
+
+# WebSocket Endpoints
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
+    """
+    WebSocket endpoint for real-time updates.
+
+    Args:
+        websocket: WebSocket connection
+        token: Optional JWT token for authentication
+    """
+    # Authenticate user if token provided
+    user_id = await authenticate_websocket(websocket, token)
+
+    # Connect to WebSocket manager
+    await connection_manager.connect(websocket, user_id)
+
+    try:
+        # Send welcome message
+        welcome_message = {
+            "type": "connection_established",
+            "message": "Connected to Football Analytics real-time updates",
+            "authenticated": user_id is not None,
+            "user_id": user_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await websocket.send_text(json.dumps(welcome_message))
+
+        # Send initial data
+        await real_time_updater.check_and_send_updates()
+
+        # Listen for messages
+        while True:
+            try:
+                data = await websocket.receive_text()
+                message = json.loads(data)
+                await handle_websocket_message(websocket, message, user_id)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({
+                    "type": "error",
+                    "message": "Invalid JSON format"
+                }))
+            except Exception as e:
+                logger.error(f"Error handling WebSocket message: {e}")
+                break
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        connection_manager.disconnect(websocket)
+
+
+@app.get("/ws/stats")
+async def get_websocket_stats():
+    """Get WebSocket connection statistics."""
+    return connection_manager.get_connection_stats()

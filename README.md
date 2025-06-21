@@ -77,14 +77,44 @@ python test_elo.py
 1. **Odds Fetcher** hits The Odds API for upcoming EPL matches.
 2. **Elo Model** assigns win/draw/loss probabilities to each match.
 3. **Value Bets** are detected by comparing your model's probabilities vs bookmaker's implied odds.
-4. Data is stored in SQLite and exposed via the `/matches/` API.
-5. **Frontend** fetches and displays value bets in a table.
+4. Data is stored in SQLite and exposed via paginated APIs.
+5. **Frontend** displays value bets with cart functionality and printing options.
 
-## 📊 API Endpoint
+## ✨ Features
 
-| Endpoint    | Method | Description            |
-| ----------- | ------ | ---------------------- |
-| `/matches/` | GET    | Returns all value bets |
+### 🎯 Value Betting
+
+-   **Elo Rating System**: Advanced team strength calculations
+-   **Real-time Odds**: Live data from The Odds API
+-   **Value Detection**: Automatic identification of profitable bets
+-   **Multiple Bookmakers**: Compare odds across different providers
+
+### 🛒 Cart System
+
+-   **Add to Cart**: Select your favorite value bets
+-   **Duplicate Prevention**: Automatic detection of duplicate selections
+-   **Print Functionality**: Generate printable betting slips
+-   **Session Management**: Cart persists during your session
+
+### 📊 User Interface
+
+-   **Pagination**: Navigate through large datasets efficiently
+-   **Filtering**: Filter by bet type (home/draw/away)
+-   **Responsive Design**: Works on desktop and mobile
+-   **Real-time Updates**: Refresh odds with one click
+
+## 📊 API Endpoints
+
+| Endpoint                   | Method | Description               |
+| -------------------------- | ------ | ------------------------- |
+| `/matches/`                | GET    | Get paginated value bets  |
+| `/matches/refresh`         | POST   | Refresh odds data         |
+| `/teams/ratings`           | GET    | Get current Elo ratings   |
+| `/cart/add`                | POST   | Add bet to cart           |
+| `/cart/`                   | GET    | Get cart contents         |
+| `/cart/remove/{id}/{type}` | DELETE | Remove bet from cart      |
+| `/cart/clear`              | DELETE | Clear entire cart         |
+| `/cart/print`              | GET    | Get printable cart format |
 
 ## 💡 Future Improvements
 
