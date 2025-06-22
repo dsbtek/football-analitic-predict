@@ -29,4 +29,5 @@ __pycache__
 /backend/logs
 /app/app.log
 /backend/app/app.log
-
+app.log
+/app.log
