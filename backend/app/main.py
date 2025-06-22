@@ -30,6 +30,7 @@ import json
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -736,6 +737,17 @@ class MatchPredictionRequest(BaseModel):
     additional_factors: Optional[Dict] = None
 
 
+class FeedbackRequest(BaseModel):
+    rating: int
+    category: str
+    message: str
+    email: Optional[str] = None
+    anonymous: bool = False
+    timestamp: str
+    user_agent: str
+    page_url: str
+
+
 @app.post("/predict/match")
 async def predict_match_outcome(request: MatchPredictionRequest):
     """
@@ -770,6 +782,51 @@ async def predict_match_outcome(request: MatchPredictionRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Prediction failed: {str(e)}"
+        )
+
+
+# Feedback Endpoint
+@app.post("/feedback")
+async def submit_feedback(feedback: FeedbackRequest):
+    """
+    Submit user feedback.
+
+    Args:
+        feedback: User feedback data
+
+    Returns:
+        Success confirmation
+    """
+    try:
+        # In a real application, you would save this to a database
+        # For now, we'll just log it and return success
+        feedback_data = {
+            "id": f"feedback_{int(time.time())}",
+            "rating": feedback.rating,
+            "category": feedback.category,
+            "message": feedback.message,
+            "email": feedback.email if not feedback.anonymous else None,
+            "anonymous": feedback.anonymous,
+            "timestamp": feedback.timestamp,
+            "user_agent": feedback.user_agent,
+            "page_url": feedback.page_url,
+            "processed_at": datetime.utcnow().isoformat()
+        }
+
+        # Log the feedback (in production, save to database)
+        print(f"📝 New Feedback Received: {feedback_data}")
+
+        return {
+            "success": True,
+            "message": "Feedback submitted successfully",
+            "feedback_id": feedback_data["id"],
+            "timestamp": feedback_data["processed_at"]
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to submit feedback: {str(e)}"
         )
 
 

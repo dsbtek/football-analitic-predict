@@ -6,7 +6,8 @@ import UserProfile from './components/UserProfile';
 import ConnectionStatus from './components/ConnectionStatus';
 import PredictionModal from './components/PredictionModal';
 import OddsRequestModal from './components/OddsRequestModal';
-import FloatingNews from './components/FloatingNews';
+import FeedbackCard from './components/FeedbackCard';
+import NewsFeed from './components/NewsFeed';
 import useWebSocket from './hooks/useWebSocket';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -403,6 +404,58 @@ function App() {
         setOddsRequestModalVisible(false);
     };
 
+    const handleCombinationAnalysis = (combo) => {
+        // Enhanced analysis for combinations
+        const analysisDetails = {
+            combination: combo,
+            timestamp: new Date().toISOString(),
+            analysis: {
+                expectedValue: combo.expected_value || 'N/A',
+                riskAssessment: combo.risk_level || 'Unknown',
+                confidence: combo.prediction_confidence || 'N/A',
+                recommendation:
+                    combo.combined_odds > 2.0 ? 'Consider' : 'High Risk',
+            },
+        };
+
+        // For now, show detailed alert - in production, could open a detailed modal
+        const analysisText = `
+🔍 DETAILED ANALYSIS
+
+${combo.description}
+
+📊 METRICS:
+• Combined Odds: ${combo.combined_odds}
+• Risk Level: ${combo.risk_level?.toUpperCase() || 'UNKNOWN'}
+• Confidence: ${combo.prediction_confidence || 'N/A'}%
+• Expected Value: ${combo.expected_value || 'N/A'}
+
+🎯 MATCHES:
+${
+    combo.matches
+        ?.map(
+            (match, i) =>
+                `• ${match.home || 'Team A'} vs ${match.away || 'Team B'} (${
+                    combo.outcomes?.[i]?.toUpperCase() || 'TBD'
+                })`,
+        )
+        .join('\n') || 'No match details available'
+}
+
+💡 REASONING:
+${combo.reasoning || 'No reasoning provided'}
+
+⚠️ RECOMMENDATION:
+${
+    combo.combined_odds > 2.0
+        ? '✅ Worth considering based on odds'
+        : '⚠️ High risk - proceed with caution'
+}
+        `.trim();
+
+        alert(analysisText);
+    };
+
     // Check if bet is in cart
     const isBetInCart = (matchId, betType) => {
         return cart.some(
@@ -521,6 +574,275 @@ function App() {
                     </button>
                 </div>
 
+                {/* New Layout Grid: 70% Matches + 30% News */}
+                <div className="content-grid">
+                    {/* Left Column: Matches (70%) */}
+                    <div className="matches-column">
+                        {error && (
+                            <div className="error-message">⚠️ {error}</div>
+                        )}
+
+                        {loading ? (
+                            <div className="loading">
+                                <div className="spinner"></div>
+                                <p>Loading value bets...</p>
+                            </div>
+                        ) : (
+                            <div className="matches-container">
+                                {filteredMatches.length === 0 ? (
+                                    <div className="no-matches">
+                                        <h3>No value bets found</h3>
+                                        <p>
+                                            Try refreshing the odds or check
+                                            back later for new opportunities.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="matches-grid">
+                                        {filteredMatches.map((match) => {
+                                            const bestBet = getBestBet(match);
+                                            return (
+                                                <div
+                                                    key={match.id}
+                                                    className="match-card"
+                                                >
+                                                    <div className="match-header">
+                                                        <div className="match-title-section">
+                                                            <h3>
+                                                                {match.home} vs{' '}
+                                                                {match.away}
+                                                            </h3>
+                                                            <span className="bookmaker">
+                                                                {
+                                                                    match.bookmaker
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            onClick={() =>
+                                                                openPredictionModal(
+                                                                    match,
+                                                                )
+                                                            }
+                                                            className="predict-match-btn"
+                                                            title="Get AI Prediction"
+                                                        >
+                                                            🔮
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="match-time">
+                                                        📅{' '}
+                                                        {formatDateTime(
+                                                            match.start_time,
+                                                        )}
+                                                    </div>
+
+                                                    <div className="best-value">
+                                                        <div className="best-bet">
+                                                            <span className="bet-type">
+                                                                Best Value:{' '}
+                                                                {bestBet.type}
+                                                            </span>
+                                                            <span className="value-percentage">
+                                                                +
+                                                                {bestBet.value.toFixed(
+                                                                    1,
+                                                                )}
+                                                                %
+                                                            </span>
+                                                        </div>
+                                                        <div className="odds">
+                                                            Odds: {bestBet.odds}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="all-values">
+                                                        <div className="value-row">
+                                                            <span>
+                                                                Home Win:
+                                                            </span>
+                                                            <span
+                                                                className={
+                                                                    match.value_home >
+                                                                    0
+                                                                        ? 'positive'
+                                                                        : 'neutral'
+                                                                }
+                                                            >
+                                                                {match.value_home >
+                                                                0
+                                                                    ? `+${match.value_home}%`
+                                                                    : '-'}
+                                                            </span>
+                                                            <span className="odds-small">
+                                                                (
+                                                                {
+                                                                    match.home_odds
+                                                                }
+                                                                )
+                                                            </span>
+                                                            {match.value_home >
+                                                                0 && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        addToCart(
+                                                                            match.id,
+                                                                            'home',
+                                                                        )
+                                                                    }
+                                                                    disabled={isBetInCart(
+                                                                        match.id,
+                                                                        'home',
+                                                                    )}
+                                                                    className="add-to-cart-btn"
+                                                                >
+                                                                    {isBetInCart(
+                                                                        match.id,
+                                                                        'home',
+                                                                    )
+                                                                        ? '✓'
+                                                                        : '+'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <div className="value-row">
+                                                            <span>Draw:</span>
+                                                            <span
+                                                                className={
+                                                                    match.value_draw >
+                                                                    0
+                                                                        ? 'positive'
+                                                                        : 'neutral'
+                                                                }
+                                                            >
+                                                                {match.value_draw >
+                                                                0
+                                                                    ? `+${match.value_draw}%`
+                                                                    : '-'}
+                                                            </span>
+                                                            <span className="odds-small">
+                                                                (
+                                                                {
+                                                                    match.draw_odds
+                                                                }
+                                                                )
+                                                            </span>
+                                                            {match.value_draw >
+                                                                0 && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        addToCart(
+                                                                            match.id,
+                                                                            'draw',
+                                                                        )
+                                                                    }
+                                                                    disabled={isBetInCart(
+                                                                        match.id,
+                                                                        'draw',
+                                                                    )}
+                                                                    className="add-to-cart-btn"
+                                                                >
+                                                                    {isBetInCart(
+                                                                        match.id,
+                                                                        'draw',
+                                                                    )
+                                                                        ? '✓'
+                                                                        : '+'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        <div className="value-row">
+                                                            <span>
+                                                                Away Win:
+                                                            </span>
+                                                            <span
+                                                                className={
+                                                                    match.value_away >
+                                                                    0
+                                                                        ? 'positive'
+                                                                        : 'neutral'
+                                                                }
+                                                            >
+                                                                {match.value_away >
+                                                                0
+                                                                    ? `+${match.value_away}%`
+                                                                    : '-'}
+                                                            </span>
+                                                            <span className="odds-small">
+                                                                (
+                                                                {
+                                                                    match.away_odds
+                                                                }
+                                                                )
+                                                            </span>
+                                                            {match.value_away >
+                                                                0 && (
+                                                                <button
+                                                                    onClick={() =>
+                                                                        addToCart(
+                                                                            match.id,
+                                                                            'away',
+                                                                        )
+                                                                    }
+                                                                    disabled={isBetInCart(
+                                                                        match.id,
+                                                                        'away',
+                                                                    )}
+                                                                    className="add-to-cart-btn"
+                                                                >
+                                                                    {isBetInCart(
+                                                                        match.id,
+                                                                        'away',
+                                                                    )
+                                                                        ? '✓'
+                                                                        : '+'}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Pagination Controls */}
+                        {pagination && pagination.total_pages > 1 && (
+                            <div className="pagination">
+                                <button
+                                    onClick={() => goToPage(currentPage - 1)}
+                                    disabled={!pagination.has_previous}
+                                    className="pagination-btn"
+                                >
+                                    ← Previous
+                                </button>
+
+                                <span className="pagination-info">
+                                    Page {pagination.page} of{' '}
+                                    {pagination.total_pages}(
+                                    {pagination.total_items} total items)
+                                </span>
+
+                                <button
+                                    onClick={() => goToPage(currentPage + 1)}
+                                    disabled={!pagination.has_next}
+                                    className="pagination-btn"
+                                >
+                                    Next →
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Column: News Feed (30%) */}
+                    <div className="news-column">
+                        <NewsFeed />
+                    </div>
+                </div>
+
                 {/* Cart Modal */}
                 {cartVisible && (
                     <div className="cart-modal">
@@ -591,234 +913,6 @@ function App() {
                         </div>
                     </div>
                 )}
-
-                {error && <div className="error-message">⚠️ {error}</div>}
-
-                {loading ? (
-                    <div className="loading">
-                        <div className="spinner"></div>
-                        <p>Loading value bets...</p>
-                    </div>
-                ) : (
-                    <div className="matches-container">
-                        {filteredMatches.length === 0 ? (
-                            <div className="no-matches">
-                                <h3>No value bets found</h3>
-                                <p>
-                                    Try refreshing the odds or check back later
-                                    for new opportunities.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="matches-grid">
-                                {filteredMatches.map((match) => {
-                                    const bestBet = getBestBet(match);
-                                    return (
-                                        <div
-                                            key={match.id}
-                                            className="match-card"
-                                        >
-                                            <div className="match-header">
-                                                <div className="match-title-section">
-                                                    <h3>
-                                                        {match.home} vs{' '}
-                                                        {match.away}
-                                                    </h3>
-                                                    <span className="bookmaker">
-                                                        {match.bookmaker}
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    onClick={() =>
-                                                        openPredictionModal(
-                                                            match,
-                                                        )
-                                                    }
-                                                    className="predict-match-btn"
-                                                    title="Get AI Prediction"
-                                                >
-                                                    🔮
-                                                </button>
-                                            </div>
-
-                                            <div className="match-time">
-                                                📅{' '}
-                                                {formatDateTime(
-                                                    match.start_time,
-                                                )}
-                                            </div>
-
-                                            <div className="best-value">
-                                                <div className="best-bet">
-                                                    <span className="bet-type">
-                                                        Best Value:{' '}
-                                                        {bestBet.type}
-                                                    </span>
-                                                    <span className="value-percentage">
-                                                        +
-                                                        {bestBet.value.toFixed(
-                                                            1,
-                                                        )}
-                                                        %
-                                                    </span>
-                                                </div>
-                                                <div className="odds">
-                                                    Odds: {bestBet.odds}
-                                                </div>
-                                            </div>
-
-                                            <div className="all-values">
-                                                <div className="value-row">
-                                                    <span>Home Win:</span>
-                                                    <span
-                                                        className={
-                                                            match.value_home > 0
-                                                                ? 'positive'
-                                                                : 'neutral'
-                                                        }
-                                                    >
-                                                        {match.value_home > 0
-                                                            ? `+${match.value_home}%`
-                                                            : '-'}
-                                                    </span>
-                                                    <span className="odds-small">
-                                                        ({match.home_odds})
-                                                    </span>
-                                                    {match.value_home > 0 && (
-                                                        <button
-                                                            onClick={() =>
-                                                                addToCart(
-                                                                    match.id,
-                                                                    'home',
-                                                                )
-                                                            }
-                                                            disabled={isBetInCart(
-                                                                match.id,
-                                                                'home',
-                                                            )}
-                                                            className="add-to-cart-btn"
-                                                        >
-                                                            {isBetInCart(
-                                                                match.id,
-                                                                'home',
-                                                            )
-                                                                ? '✓'
-                                                                : '+'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <div className="value-row">
-                                                    <span>Draw:</span>
-                                                    <span
-                                                        className={
-                                                            match.value_draw > 0
-                                                                ? 'positive'
-                                                                : 'neutral'
-                                                        }
-                                                    >
-                                                        {match.value_draw > 0
-                                                            ? `+${match.value_draw}%`
-                                                            : '-'}
-                                                    </span>
-                                                    <span className="odds-small">
-                                                        ({match.draw_odds})
-                                                    </span>
-                                                    {match.value_draw > 0 && (
-                                                        <button
-                                                            onClick={() =>
-                                                                addToCart(
-                                                                    match.id,
-                                                                    'draw',
-                                                                )
-                                                            }
-                                                            disabled={isBetInCart(
-                                                                match.id,
-                                                                'draw',
-                                                            )}
-                                                            className="add-to-cart-btn"
-                                                        >
-                                                            {isBetInCart(
-                                                                match.id,
-                                                                'draw',
-                                                            )
-                                                                ? '✓'
-                                                                : '+'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <div className="value-row">
-                                                    <span>Away Win:</span>
-                                                    <span
-                                                        className={
-                                                            match.value_away > 0
-                                                                ? 'positive'
-                                                                : 'neutral'
-                                                        }
-                                                    >
-                                                        {match.value_away > 0
-                                                            ? `+${match.value_away}%`
-                                                            : '-'}
-                                                    </span>
-                                                    <span className="odds-small">
-                                                        ({match.away_odds})
-                                                    </span>
-                                                    {match.value_away > 0 && (
-                                                        <button
-                                                            onClick={() =>
-                                                                addToCart(
-                                                                    match.id,
-                                                                    'away',
-                                                                )
-                                                            }
-                                                            disabled={isBetInCart(
-                                                                match.id,
-                                                                'away',
-                                                            )}
-                                                            className="add-to-cart-btn"
-                                                        >
-                                                            {isBetInCart(
-                                                                match.id,
-                                                                'away',
-                                                            )
-                                                                ? '✓'
-                                                                : '+'}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Pagination Controls */}
-                {pagination && pagination.total_pages > 1 && (
-                    <div className="pagination">
-                        <button
-                            onClick={() => goToPage(currentPage - 1)}
-                            disabled={!pagination.has_previous}
-                            className="pagination-btn"
-                        >
-                            ← Previous
-                        </button>
-
-                        <span className="pagination-info">
-                            Page {pagination.page} of {pagination.total_pages}(
-                            {pagination.total_items} total items)
-                        </span>
-
-                        <button
-                            onClick={() => goToPage(currentPage + 1)}
-                            disabled={!pagination.has_next}
-                            className="pagination-btn"
-                        >
-                            Next →
-                        </button>
-                    </div>
-                )}
             </main>
 
             <footer className="app-footer">
@@ -840,11 +934,15 @@ function App() {
 
             {/* Odds Request Modal */}
             {oddsRequestModalVisible && (
-                <OddsRequestModal onClose={closeOddsRequestModal} />
+                <OddsRequestModal
+                    onClose={closeOddsRequestModal}
+                    addToCart={addToCart}
+                    onAnalyze={handleCombinationAnalysis}
+                />
             )}
 
-            {/* Floating News */}
-            <FloatingNews />
+            {/* User Feedback Card */}
+            <FeedbackCard />
         </div>
     );
 }
